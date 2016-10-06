@@ -1,3 +1,10 @@
-<?php namespace Illuminate\Contracts\Filesystem;
+<?php
 
-class FileNotFoundException extends \Exception {}
+namespace Illuminate\Contracts\Filesystem;
+
+use Exception;
+
+class FileNotFoundException extends Exception
+{
+    //
+}

@@ -1,96 +1,121 @@
-<?php namespace Illuminate\Database\Console\Migrations;
+<?php
+
+namespace Illuminate\Database\Console\Migrations;
 
 use Illuminate\Console\Command;
 use Illuminate\Console\ConfirmableTrait;
 use Symfony\Component\Console\Input\InputOption;
 
-class RefreshCommand extends Command {
+class RefreshCommand extends Command
+{
+    use ConfirmableTrait;
 
-	use ConfirmableTrait;
+    /**
+     * The console command name.
+     *
+     * @var string
+     */
+    protected $name = 'migrate:refresh';
 
-	/**
-	 * The console command name.
-	 *
-	 * @var string
-	 */
-	protected $name = 'migrate:refresh';
+    /**
+     * The console command description.
+     *
+     * @var string
+     */
+    protected $description = 'Reset and re-run all migrations';
 
-	/**
-	 * The console command description.
-	 *
-	 * @var string
-	 */
-	protected $description = 'Reset and re-run all migrations';
+    /**
+     * Execute the console command.
+     *
+     * @return void
+     */
+    public function fire()
+    {
+        if (! $this->confirmToProceed()) {
+            return;
+        }
 
-	/**
-	 * Execute the console command.
-	 *
-	 * @return void
-	 */
-	public function fire()
-	{
-		if ( ! $this->confirmToProceed()) return;
+        $database = $this->input->getOption('database');
 
-		$database = $this->input->getOption('database');
+        $force = $this->input->getOption('force');
 
-		$force = $this->input->getOption('force');
+        $path = $this->input->getOption('path');
 
-		$this->call('migrate:reset', array(
-			'--database' => $database, '--force' => $force
-		));
+        // If the "step" option is specified it means we only want to rollback a small
+        // number of migrations before migrating again. For example, the user might
+        // only rollback and remigrate the latest four migrations instead of all.
+        $step = $this->input->getOption('step') ?: 0;
 
-		// The refresh command is essentially just a brief aggregate of a few other of
-		// the migration commands and just provides a convenient wrapper to execute
-		// them in succession. We'll also see if we need to re-seed the database.
-		$this->call('migrate', array(
-			'--database' => $database, '--force' => $force
-		));
+        if ($step > 0) {
+            $this->call('migrate:rollback', [
+                '--database' => $database, '--force' => $force, '--path' => $path, '--step' => $step,
+            ]);
+        } else {
+            $this->call('migrate:reset', [
+                '--database' => $database, '--force' => $force, '--path' => $path,
+            ]);
+        }
 
-		if ($this->needsSeeding())
-		{
-			$this->runSeeder($database);
-		}
-	}
+        // The refresh command is essentially just a brief aggregate of a few other of
+        // the migration commands and just provides a convenient wrapper to execute
+        // them in succession. We'll also see if we need to re-seed the database.
+        $this->call('migrate', [
+            '--database' => $database,
+            '--force' => $force,
+            '--path' => $path,
+        ]);
 
-	/**
-	 * Determine if the developer has requested database seeding.
-	 *
-	 * @return bool
-	 */
-	protected function needsSeeding()
-	{
-		return $this->option('seed') || $this->option('seeder');
-	}
+        if ($this->needsSeeding()) {
+            $this->runSeeder($database);
+        }
+    }
 
-	/**
-	 * Run the database seeder command.
-	 *
-	 * @param  string  $database
-	 * @return void
-	 */
-	protected function runSeeder($database)
-	{
-		$class = $this->option('seeder') ?: 'DatabaseSeeder';
+    /**
+     * Determine if the developer has requested database seeding.
+     *
+     * @return bool
+     */
+    protected function needsSeeding()
+    {
+        return $this->option('seed') || $this->option('seeder');
+    }
 
-		$this->call('db:seed', array('--database' => $database, '--class' => $class));
-	}
+    /**
+     * Run the database seeder command.
+     *
+     * @param  string  $database
+     * @return void
+     */
+    protected function runSeeder($database)
+    {
+        $class = $this->option('seeder') ?: 'DatabaseSeeder';
 
-	/**
-	 * Get the console command options.
-	 *
-	 * @return array
-	 */
-	protected function getOptions()
-	{
-		return array(
-			array('database', null, InputOption::VALUE_OPTIONAL, 'The database connection to use.'),
+        $force = $this->input->getOption('force');
 
-			array('force', null, InputOption::VALUE_NONE, 'Force the operation to run when in production.'),
+        $this->call('db:seed', [
+            '--database' => $database, '--class' => $class, '--force' => $force,
+        ]);
+    }
 
-			array('seed', null, InputOption::VALUE_NONE, 'Indicates if the seed task should be re-run.'),
+    /**
+     * Get the console command options.
+     *
+     * @return array
+     */
+    protected function getOptions()
+    {
+        return [
+            ['database', null, InputOption::VALUE_OPTIONAL, 'The database connection to use.'],
 
-			array('seeder', null, InputOption::VALUE_OPTIONAL, 'The class name of the root seeder.'),
-		);
-	}
+            ['force', null, InputOption::VALUE_NONE, 'Force the operation to run when in production.'],
 
+            ['path', null, InputOption::VALUE_OPTIONAL, 'The path of migrations files to be executed.'],
+
+            ['seed', null, InputOption::VALUE_NONE, 'Indicates if the seed task should be re-run.'],
+
+            ['seeder', null, InputOption::VALUE_OPTIONAL, 'The class name of the root seeder.'],
+
+            ['step', null, InputOption::VALUE_OPTIONAL, 'The number of migrations to be reverted & re-run.'],
+        ];
+    }
 }

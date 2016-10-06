@@ -1,48 +1,89 @@
 <?php
 
 use Mockery as m;
+use Illuminate\Foundation\Application;
 use Illuminate\Database\Console\Migrations\RollbackCommand;
 
-class DatabaseMigrationRollbackCommandTest extends PHPUnit_Framework_TestCase {
+class DatabaseMigrationRollbackCommandTest extends PHPUnit_Framework_TestCase
+{
+    public function tearDown()
+    {
+        m::close();
+    }
 
-	public function tearDown()
-	{
-		m::close();
-	}
+    public function testRollbackCommandCallsMigratorWithProperArguments()
+    {
+        $command = new RollbackCommand($migrator = m::mock('Illuminate\Database\Migrations\Migrator'));
+        $app = new ApplicationDatabaseRollbackStub(['path.database' => __DIR__]);
+        $app->useDatabasePath(__DIR__);
+        $command->setLaravel($app);
+        $migrator->shouldReceive('paths')->once()->andReturn([]);
+        $migrator->shouldReceive('setConnection')->once()->with(null);
+        $migrator->shouldReceive('rollback')->once()->with([__DIR__.'/migrations'], ['pretend' => false, 'step' => 0]);
+        $migrator->shouldReceive('getNotes')->andReturn([]);
 
+        $this->runCommand($command);
+    }
 
-	public function testRollbackCommandCallsMigratorWithProperArguments()
-	{
-		$command = new RollbackCommand($migrator = m::mock('Illuminate\Database\Migrations\Migrator'));
-		$command->setLaravel(new AppDatabaseMigrationRollbackStub());
-		$migrator->shouldReceive('setConnection')->once()->with(null);
-		$migrator->shouldReceive('rollback')->once()->with(false);
-		$migrator->shouldReceive('getNotes')->andReturn(array());
+    public function testRollbackCommandCallsMigratorWithStepOption()
+    {
+        $command = new RollbackCommand($migrator = m::mock('Illuminate\Database\Migrations\Migrator'));
+        $app = new ApplicationDatabaseRollbackStub(['path.database' => __DIR__]);
+        $app->useDatabasePath(__DIR__);
+        $command->setLaravel($app);
+        $migrator->shouldReceive('paths')->once()->andReturn([]);
+        $migrator->shouldReceive('setConnection')->once()->with(null);
+        $migrator->shouldReceive('rollback')->once()->with([__DIR__.'/migrations'], ['pretend' => false, 'step' => 2]);
+        $migrator->shouldReceive('getNotes')->andReturn([]);
 
-		$this->runCommand($command);
-	}
+        $this->runCommand($command, ['--step' => 2]);
+    }
 
+    public function testRollbackCommandCanBePretended()
+    {
+        $command = new RollbackCommand($migrator = m::mock('Illuminate\Database\Migrations\Migrator'));
+        $app = new ApplicationDatabaseRollbackStub(['path.database' => __DIR__]);
+        $app->useDatabasePath(__DIR__);
+        $command->setLaravel($app);
+        $migrator->shouldReceive('paths')->once()->andReturn([]);
+        $migrator->shouldReceive('setConnection')->once()->with('foo');
+        $migrator->shouldReceive('rollback')->once()->with([__DIR__.'/migrations'], true);
+        $migrator->shouldReceive('getNotes')->andReturn([]);
 
-	public function testRollbackCommandCanBePretended()
-	{
-		$command = new RollbackCommand($migrator = m::mock('Illuminate\Database\Migrations\Migrator'));
-		$command->setLaravel(new AppDatabaseMigrationRollbackStub());
-		$migrator->shouldReceive('setConnection')->once()->with('foo');
-		$migrator->shouldReceive('rollback')->once()->with(true);
-		$migrator->shouldReceive('getNotes')->andReturn(array());
+        $this->runCommand($command, ['--pretend' => true, '--database' => 'foo']);
+    }
 
-		$this->runCommand($command, array('--pretend' => true, '--database' => 'foo'));
-	}
+    public function testRollbackCommandCanBePretendedWithStepOption()
+    {
+        $command = new RollbackCommand($migrator = m::mock('Illuminate\Database\Migrations\Migrator'));
+        $app = new ApplicationDatabaseRollbackStub(['path.database' => __DIR__]);
+        $app->useDatabasePath(__DIR__);
+        $command->setLaravel($app);
+        $migrator->shouldReceive('paths')->once()->andReturn([]);
+        $migrator->shouldReceive('setConnection')->once()->with('foo');
+        $migrator->shouldReceive('rollback')->once()->with([__DIR__.'/migrations'], ['pretend' => true, 'step' => 2]);
+        $migrator->shouldReceive('getNotes')->andReturn([]);
 
+        $this->runCommand($command, ['--pretend' => true, '--database' => 'foo', '--step' => 2]);
+    }
 
-	protected function runCommand($command, $input = array())
-	{
-		return $command->run(new Symfony\Component\Console\Input\ArrayInput($input), new Symfony\Component\Console\Output\NullOutput);
-	}
-
+    protected function runCommand($command, $input = [])
+    {
+        return $command->run(new Symfony\Component\Console\Input\ArrayInput($input), new Symfony\Component\Console\Output\NullOutput);
+    }
 }
 
-class AppDatabaseMigrationRollbackStub {
-	public $env = 'development';
-	public function environment() { return $this->env; }
+class ApplicationDatabaseRollbackStub extends Application
+{
+    public function __construct(array $data = [])
+    {
+        foreach ($data as $abstract => $instance) {
+            $this->instance($abstract, $instance);
+        }
+    }
+
+    public function environment()
+    {
+        return 'development';
+    }
 }
